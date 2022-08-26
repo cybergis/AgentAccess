@@ -7,3 +7,7 @@ curr_dir=$(pwd)
 cd travel_times/
 bzip2 -dk *.bz2
 cd $curr_dir
+# unzip the SVI data
+cd svi/
+unzip SVI2018_US_CT.zip
+cd $curr_dir
