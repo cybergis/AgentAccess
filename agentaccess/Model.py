@@ -1,13 +1,28 @@
 import contextily as cx
+import copy
 from datetime import datetime
 import geopandas as gpd
+import imageio
+import json
 import math
+from matplotlib import gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
+
+
+# utility function
+
+def is_jsonable(x):
+    """Determines if an object is json serializable"""
+    try:
+        json.dumps(x)
+        return True
+    except:
+        return False
 
 
 class AgentAccess:
@@ -24,6 +39,7 @@ class AgentAccess:
         self.cost_origin = cost_origin
         self.cost_dest = cost_dest
         self.cost_field = cost_field
+        self.time_steps = time_steps
         # parameters
         self.memory = memory
         self.pop_per_agent = pop_per_agent
@@ -31,6 +47,7 @@ class AgentAccess:
         # I/O
         self.output_path = output_path
         self.create_output_directory()
+        self.save_params()
         # setup data we will work on
         self.spatial_units_df = None
         # prepare data
@@ -38,9 +55,10 @@ class AgentAccess:
         self.generate_agents_from_pop_data()
         self.get_travel_dict()
         # run the model
-        for i in tqdm(range(time_steps), position=0, desc="Running Model"):
+        for i in tqdm(range(self.time_steps), position=0, desc="Running Model"):
             self.time_step(i)
         self.save_outputs()
+        self.save_gif()
 
     def aggregate_resources_to_spatial_units(self) -> None:
         """Takes a GeoDataFrame of resources and spatially joins to spatial units, then aggregates the values giving us a lookup of GEOID -> number of resources"""
@@ -173,19 +191,39 @@ class AgentAccess:
 
     def plot_this_timestep(self, time, save=True, show=True):
         """Plots the results for this single timestep"""
-        fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(20, 8))
+        fig = plt.figure(figsize=(24, 6))
+        gs = gridspec.GridSpec(2, 3, width_ratios=[1, 1, 1])
+        # fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(18, 6))
+        map_axes = [fig.add_subplot(gs[:, x]) for x in [0, 1]]
         columns = [f"Ratio {time}", f"Time {time}"]
         geodataframes = [self.spatial_units_df, self.spatial_units_df]
-        for ax, col, data in zip(axes, columns, geodataframes):
+        for ax, col, data in zip(map_axes, columns, geodataframes):
             ax = data.plot(ax=ax, column=col, legend=True)
             cx.add_basemap(ax, crs=data.crs.to_string())
             ax.set_title(f"{col[:-2]} at Time Step {time}")
+        chart_axes = [fig.add_subplot(gs[x, 2]) for x in [0, 1]]
+        # plot the ratio over time
+        time_steps = time + 1
+        for index, row in self.spatial_units_df.iterrows():
+            chart_axes[0].plot(range(time_steps), list(row[[f"Ratio {x}" for x in range(time_steps)]]), alpha=0.2)
+        chart_axes[0].set_title("Average Supply-to-Agent Ratio")
+        # plot the time over time
+        for index, row in self.spatial_units_df.iterrows():
+            chart_axes[1].plot(range(time_steps), list(row[[f"Time {x}" for x in range(time_steps)]]), alpha=0.2)
+        chart_axes[1].set_title("Average Time to Resource")
         plt.tight_layout()
         if save:
             plt.savefig(os.path.join(self.output_dir, f"UI-{time}.png"))
         if show:
             plt.show()
         plt.close('all')
+
+    def save_gif(self):
+        """Creates and saves a gif from the outputs"""
+        images = []
+        for plot in range(self.time_steps):
+            images.append(imageio.imread(os.path.join(self.output_dir, "UI-{}.png".format(plot))))
+        imageio.mimsave(os.path.join(self.output_dir, 'movie.gif'), images)
 
     def save_outputs(self):
         """Saves the output dataframes"""
@@ -205,9 +243,26 @@ class AgentAccess:
             save_path = os.path.join(self.output_dir, filename)
             to_save[i].to_file(save_path, driver=driver)
 
+    def save_params(self):
+        """Saves the parameters used by the model in the directory"""
+        to_save = copy.copy(self.__dict__)
+        keys_to_delete = []
+        for key, value in to_save.items():
+            if not is_jsonable(value):
+                keys_to_delete.append(key)
+        for key in keys_to_delete:
+            del to_save[key]
+        to_save = json.dumps(to_save, indent=4)
+        if self.output_dir is None:
+            self.create_output_directory()
+        param_path = os.path.join(self.output_dir, "parameters.json")
+        with open(param_path, "w") as outfile:
+            outfile.write(to_save)
+
     def time_step(self, time, memory=0, top_k=5):
         """Runs a full time step of the model"""
         self.choose_resources_gravity(time)
         self.calculate_supply_demand_ratio(time)
         self.mean_agent_ratio(time)
         self.mean_agent_time(time)
+        self.plot_this_timestep(time)
