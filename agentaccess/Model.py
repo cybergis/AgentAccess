@@ -41,6 +41,7 @@ class AgentAccess:
         self.cost_field = cost_field
         self.time_steps = time_steps
         # parameters
+        self.beta = 2
         self.memory = memory
         self.pop_per_agent = pop_per_agent
         self.top_k = top_k
@@ -104,19 +105,16 @@ class AgentAccess:
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
         for geoid in locations:
             resource_probabilities = []
-            for index, row in self.supply_df.iterrows():
-                supply = float(row["Supply"])  # use supply if the first time step, ratio afterwards
-                if time_step > 0:
-                    # supply = float(row[f"Ratio {time_step-1}"])
-                    steps_remembered = range(0, time_step)
-                    if self.memory > 0:
-                        steps_remembered = range(max(0, time_step - self.memory), time_step)
-                    supply = float(np.mean([row[f"Ratio {ts}"] for ts in steps_remembered]))
-                # add the small number to avoid division by zero
-                time = self.cost_df[geoid, index] + 0.1
-                resource_probabilities.append(supply / (time ** 2))
-            resource_probabilities = np.asarray(resource_probabilities)
-            # print(resource_probabilities)
+            supply = np.array(self.supply_df["Supply"])  # use supply if the first time step, ratio afterwards
+            if time_step > 0:
+                # supply = float(row[f"Ratio {time_step-1}"])
+                steps_remembered = range(0, time_step)
+                if self.memory > 0:
+                    steps_remembered = range(max(0, time_step - self.memory), time_step)
+                supply = self.supply_df[[f"Ratio {ts}" for ts in steps_remembered]].mean(axis=1)
+            # add the small number to avoid division by zero
+            time = np.array([self.cost_df[geoid, index] + 0.1 for index in self.supply_df.index])
+            resource_probabilities = supply / (time ** self.beta)
             resources_to_consider = self.supply_df.index
             if self.top_k >= 0:
                 # get the top k options
@@ -201,6 +199,7 @@ class AgentAccess:
             ax = data.plot(ax=ax, column=col, legend=True)
             cx.add_basemap(ax, crs=data.crs.to_string())
             ax.set_title(f"{col[:-2]} at Time Step {time}")
+            ax.axis('off')
         chart_axes = [fig.add_subplot(gs[x, 2]) for x in [0, 1]]
         # plot the ratio over time
         time_steps = time + 1
@@ -213,7 +212,7 @@ class AgentAccess:
         chart_axes[1].set_title("Average Time to Resource")
         plt.tight_layout()
         if save:
-            plt.savefig(os.path.join(self.output_dir, f"UI-{time}.png"))
+            plt.savefig(os.path.join(self.output_dir, f"UI-{time}.png"), dpi=100)
         if show:
             plt.show()
         plt.close('all')
@@ -223,7 +222,7 @@ class AgentAccess:
         images = []
         for plot in range(self.time_steps):
             images.append(imageio.imread(os.path.join(self.output_dir, "UI-{}.png".format(plot))))
-        imageio.mimsave(os.path.join(self.output_dir, 'movie.gif'), images)
+        imageio.mimsave(os.path.join(self.output_dir, 'movie.gif'), images, format="GIF", fps=2)
 
     def save_outputs(self):
         """Saves the output dataframes"""
@@ -259,7 +258,7 @@ class AgentAccess:
         with open(param_path, "w") as outfile:
             outfile.write(to_save)
 
-    def time_step(self, time, memory=0, top_k=5):
+    def time_step(self, time):
         """Runs a full time step of the model"""
         self.choose_resources_gravity(time)
         self.calculate_supply_demand_ratio(time)
