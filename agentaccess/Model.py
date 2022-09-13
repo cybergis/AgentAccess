@@ -28,7 +28,7 @@ def is_jsonable(x):
 class AgentAccess:
     def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
                  cost_df, cost_origin, cost_dest, cost_field, time_steps, cost_function="raam",
-                 beta=2, memory=0, pop_per_agent=1000, tau=30, top_k=0,
+                 beta=2, memory=0, pop_per_agent=1000, tau=30, top_k=0, cost_prop=None, cost_prop_fields=None,
                  output_path=None):
         self.demand_df = demand_df
         self.demand_geoid = demand_geoid
@@ -39,7 +39,9 @@ class AgentAccess:
         self.cost_df = cost_df
         self.cost_origin = cost_origin
         self.cost_dest = cost_dest
-        self.cost_field = cost_field
+        self.cost_field = cost_field if isinstance(cost_field, list) else [cost_field]
+        self.cost_prop = cost_prop
+        self.cost_prop_fields = cost_prop_fields
         self.time_steps = time_steps
         # parameters
         self.beta = beta
@@ -62,11 +64,6 @@ class AgentAccess:
         # set rho to the inverse PPR (Provider-to-Patient Ratio)
         self.rho = len(self.demand_df) / sum(self.supply_df["Supply"])
         # print(self.rho)
-        # run the model
-        for i in tqdm(range(self.time_steps), position=0, desc="Running Model"):
-            self.time_step(i)
-        self.save_outputs()
-        self.save_gif()
 
     def aggregate_resources_to_spatial_units(self) -> None:
         """Takes a GeoDataFrame of resources and spatially joins to spatial units, then aggregates the values giving us a lookup of GEOID -> number of resources"""
@@ -135,41 +132,62 @@ class AgentAccess:
         self.mean_agent_ratio(time)
         self.mean_agent_time(time)
 
-    def choose_resources_gravity(self, time_step):
+    def choose_resources(self, time_step):
         """Chooses the resource for each agent randomly using gravity models as probability"""
         locations = list(set(self.demand_df["GEOID"]))
-        choice_field, cost_field = f"Choice {time_step}", f"Cost {time_step}"
-        self.demand_df[choice_field] = ""
+        choice_col, cost_col = f"Choice {time_step}", f"Cost {time_step}"
+        self.demand_df[choice_col] = ""
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
         for geoid in locations:
-            resource_probabilities = []
-            supply = np.array([self.rho for x in range(len(self.supply_df))])  # use global PPR first time step, ratio afterwards
-            if time_step > 0:
-                # supply = float(row[f"D/S Ratio {time_step-1}"])
-                steps_remembered = range(0, time_step)
-                if self.memory > 0:
-                    steps_remembered = range(max(0, time_step - self.memory), time_step)
-                supply = np.array(self.supply_df[[f"D/S Ratio {ts}" for ts in steps_remembered]].mean(axis=1))
-            # add the small number to avoid division by zero
-            time = np.array([self.cost_df[geoid, index] + 0.1 for index in self.supply_df.index])
-            costs = self.calculate_costs(supply, time)
-            resources_to_consider = self.supply_df.index
-            if self.top_k > 0:
-                # get the minimum k costs
-                sorted_inds = costs.argsort()
-                ind = sorted_inds[:self.top_k]
-                resources_to_consider = self.supply_df.index[ind]
-                costs = costs[ind]
-            # probabilities are inverse to costs
-            resource_probabilities = 1 / costs
-            # print(resource_probabilities)
-            resource_probabilities = resource_probabilities / sum(resource_probabilities)
-            # print(resource_probabilities)
             agents_here = self.demand_df[self.demand_df["GEOID"] == geoid].index
+            # calculate what is reachable from this location
+            reachable = dict()
+            for travel_method in self.cost_field:
+                travel_from_here = self.cost_df.loc[geoid]
+                # get the geoids I can reach
+                reachable[travel_method] = travel_from_here[travel_from_here[travel_method].notna()].index
+            # get travel time for each method
+            times = dict()
+            for travel_field in self.cost_field:
+                # add the small number to avoid division by zero
+                times[travel_field] = np.array([self.cost_df.loc[(geoid, index), travel_field] + 0.1 for index in reachable[travel_field]])
+            # calculate the supply (realistically supply/demand)
+            supplies = dict()
+            for travel_field in self.cost_field:
+                supplies[travel_field] = np.array([self.rho for x in range(len(reachable[travel_field]))])  # use global PPR first time step, ratio afterwards
+                if time_step > 0:
+                    steps_remembered = range(0, time_step)
+                    if self.memory > 0:
+                        steps_remembered = range(max(0, time_step - self.memory), time_step)
+                    reachable_supplies = self.supply_df[self.supply_df.index.isin(reachable[travel_field])]
+                    supplies[travel_field] = np.array(reachable_supplies[[f"D/S Ratio {ts}" for ts in steps_remembered]].mean(axis=1))
             for a_index in agents_here:
+                # get the travel method for this agent
+                my_cost = self.demand_df.loc[a_index, "Cost Field"]
+                # get the times and supplies for all places I can reach
+                resources_to_consider = reachable[my_cost]
+                if len(resources_to_consider) == 0:
+                    self.demand_df.at[a_index, choice_col] = None
+                    self.demand_df.at[a_index, cost_col] = None
+                    continue
+                time = times[my_cost]
+                supply = supplies[my_cost]
+                # print(geoid, my_cost, len(reachable[my_cost]), len(reachable[my_cost]), len(time), len(supply))
+                costs = self.calculate_costs(supply, time)
+                if self.top_k > 0:
+                    # get the minimum k costs
+                    sorted_inds = costs.argsort()
+                    ind = sorted_inds[:self.top_k]
+                    resources_to_consider = resources_to_consider[ind]
+                    costs = costs[ind]
+                # probabilities are inverse to costs
+                resource_probabilities = 1 / costs
+                # print(resource_probabilities)
+                resource_probabilities = resource_probabilities / sum(resource_probabilities)
+                # print(resource_probabilities)
                 choice_ind = np.random.choice(range(len(resource_probabilities)), p=resource_probabilities)
-                self.demand_df.at[a_index, choice_field] = resources_to_consider[choice_ind]
-                self.demand_df.at[a_index, cost_field] = costs[choice_ind]
+                self.demand_df.at[a_index, choice_col] = resources_to_consider[choice_ind]
+                self.demand_df.at[a_index, cost_col] = costs[choice_ind]
 
     def create_output_directory(self):
         """Creates the output directory for the model"""
@@ -183,19 +201,37 @@ class AgentAccess:
         """Generates a set of agents based on population data."""
         agent_data = []
         self.demand_df = self.demand_df.drop_duplicates(subset=[self.demand_geoid])
+        if self.cost_prop is not None:
+            assert math.isclose(sum(self.cost_prop), 1, rel_tol=0.01)  # use that data, but make sure it sums to 1
+        elif self.cost_prop is None:
+            # assign equal proportions
+            proportions = [1 / len(self.cost_field) for i in self.cost_field]
+            self.cost_prop = np.array(proportions)
         agent_counter = 0
         for index, row in self.demand_df.iterrows():
             # get this row's ID
             _id = str(row[self.demand_geoid])
+            cprop = self.cost_prop
+            if self.cost_prop_fields is not None:
+                # create proportions that sum to one based on fields
+                props = row[self.cost_prop_fields].values
+                # print(props)
+                if sum(props) == 0:  # use uniform
+                    cprop = [1 / len(self.cost_field) for i in self.cost_field]
+                else:
+                    cprop = [x / sum(props) for x in props]
+                # print(cprop)
+            assert math.isclose(sum(cprop), 1, rel_tol=0.01)
             # get the pop data for that locale.
             # Add one so that no location has no agents
             pop_num = float(row[self.demand_field]) + 1
             # determine number of agents in this locale
             num_agents = math.ceil(pop_num / self.pop_per_agent)
             for agent in range(num_agents):
-                agent_data.append([agent_counter, _id])
+                travel_type = np.random.choice(self.cost_field, p=cprop)
+                agent_data.append([agent_counter, _id, travel_type])
                 agent_counter += 1
-        self.demand_df = pd.DataFrame(agent_data, columns=["ID", "GEOID"])
+        self.demand_df = pd.DataFrame(agent_data, columns=["ID", "GEOID", "Cost Field"])
 
     def get_spatial_units(self):
         """
@@ -212,7 +248,6 @@ class AgentAccess:
         destinations = list(set(self.supply_df.index))
         self.cost_df = self.cost_df[self.cost_df[self.cost_dest].isin(destinations)]
         self.cost_df = self.cost_df.set_index([self.cost_origin, self.cost_dest])
-        self.cost_df = self.cost_df[self.cost_field].rename("Cost")
 
     def mean_agent_ratio(self, time):
         """Calculate the average supply/demand ratio for each spatial unit"""
@@ -225,25 +260,25 @@ class AgentAccess:
     def mean_agent_time(self, time):
         """Calculate the average supply/demand ratio for each spatial unit"""
         choice_field, time_field = f"Choice {time}", f"Time {time}"
-        choices = self.demand_df[["GEOID", choice_field]].merge(self.cost_df.to_frame()[["Cost"]], left_on=["GEOID", choice_field], right_index=True)
-        mean_time = choices.groupby("GEOID")["Cost"].mean()
+        choices = self.demand_df[["GEOID", choice_field]].merge(self.cost_df[self.cost_field[0]], left_on=["GEOID", choice_field], right_index=True)
+        mean_time = choices.groupby("GEOID")[self.cost_field[0]].mean()
         self.spatial_units_df = self.spatial_units_df.merge(mean_time.rename(time_field).to_frame(), how="left", left_index=True, right_index=True)
         self.spatial_units_df[time_field] = self.spatial_units_df[time_field].fillna(0)
 
-    def plot_this_timestep(self, time, save=True, show=True):
+    def plot_this_timestep(self, time, save=True, show=False):
         """Plots the results for this single timestep"""
-        fig = plt.figure(figsize=(24, 6))
-        gs = gridspec.GridSpec(2, 3, width_ratios=[1, 1, 1])
+        fig = plt.figure(figsize=(12, 8))
+        gs = gridspec.GridSpec(3, 2, width_ratios=[1, 1])
         # fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(18, 6))
-        map_axes = [fig.add_subplot(gs[:, x]) for x in [0, 1]]
+        map_axes = [fig.add_subplot(gs[0:2, x]) for x in [0, 1]]
         columns = [f"Cost {time}", f"Time {time}"]
         geodataframes = [self.spatial_units_df, self.spatial_units_df]
         for ax, col, data in zip(map_axes, columns, geodataframes):
-            ax = data.plot(ax=ax, column=col, legend=True)
+            ax = data.plot(ax=ax, column=col, legend=True, legend_kwds={'fraction': 0.046, 'pad': 0.04})
             cx.add_basemap(ax, crs=data.crs.to_string())
             ax.set_title(f"{col[:-2]} at Time Step {time}")
             ax.axis('off')
-        chart_axes = [fig.add_subplot(gs[x, 2]) for x in [0, 1]]
+        chart_axes = [fig.add_subplot(gs[2, x]) for x in [0, 1]]
         # plot the ratio over time
         time_steps = time + 1
         for index, row in self.spatial_units_df.iterrows():
@@ -265,12 +300,19 @@ class AgentAccess:
             plt.show()
         plt.close('all')
 
+    def run_model(self):
+        """Runs the model and saves the outputs"""
+        for i in tqdm(range(self.time_steps), position=0, desc="Running Model"):
+            self.time_step(i)
+        self.save_outputs()
+        self.save_gif()
+
     def save_gif(self):
         """Creates and saves a gif from the outputs"""
         images = []
         for plot in range(self.time_steps):
             images.append(imageio.imread(os.path.join(self.output_dir, "UI-{}.png".format(plot))))
-        imageio.mimsave(os.path.join(self.output_dir, 'movie.gif'), images, format="GIF", fps=2)
+        imageio.mimsave(os.path.join(self.output_dir, 'movie.gif'), images, fps=2)
 
     def save_outputs(self):
         """Saves the output dataframes"""
@@ -308,6 +350,6 @@ class AgentAccess:
 
     def time_step(self, time):
         """Runs a full time step of the model"""
-        self.choose_resources_gravity(time)
+        self.choose_resources(time)
         self.calculate_step_statistics(time)
         self.plot_this_timestep(time)
