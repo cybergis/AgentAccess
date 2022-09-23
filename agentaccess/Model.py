@@ -79,7 +79,7 @@ class AgentAccess:
         """Calculates the costs for each choice"""
         if self.cost_function == "gravity":
             # inverse of classic gravity
-            return (time ** self.beta) / (1 / supply)
+            return (time ** self.beta) * supply
         elif self.cost_function == "raam":
             # print("Rhos")
             # print((supply / (self.rho)))
@@ -89,7 +89,7 @@ class AgentAccess:
         elif self.cost_function == "time":
             return time ** self.beta
         else:  # default to gravity
-            return (time ** self.beta) / supply
+            return (time ** self.beta) * supply
 
     def calculate_mean_cost(self, time):
         """Calculate the agent's average cost per spatial unit"""
@@ -113,7 +113,7 @@ class AgentAccess:
             avg_ratio = sum([ratio_dict[x] for x in agent_choices]) / len(agent_choices)
             self.spatial_units_df.loc[index, ratio_field] = avg_ratio
 
-    def calculate_supply_demand_ratio(self, time):
+    def calculate_demand_supply_ratio(self, time):
         """Calculates the supply/demand ratio for a given time step"""
         choice, demand, ratio = f"Choice {time}", f"Demand {time}", f"D/S Ratio {time}"
         # figure out how many agents used each supply choice
@@ -128,7 +128,7 @@ class AgentAccess:
     def calculate_step_statistics(self, time):
         """Calculate statistics for this time step."""
         self.calculate_mean_cost(time)
-        self.calculate_supply_demand_ratio(time)
+        self.calculate_demand_supply_ratio(time)
         self.mean_agent_ratio(time)
         self.mean_agent_time(time)
 
