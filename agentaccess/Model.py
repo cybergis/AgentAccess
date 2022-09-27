@@ -75,21 +75,21 @@ class AgentAccess:
         self.supply_df = self.supply_df.rename(columns={self.supply_field: "Supply"})
         self.supply_df = self.supply_df.dissolve(by="GEOID", aggfunc="sum")
 
-    def calculate_costs(self, supply, time):
+    def calculate_costs(self, utilization, time):
         """Calculates the costs for each choice"""
         if self.cost_function == "gravity":
             # inverse of classic gravity
-            return (time ** self.beta) * supply
+            return (time ** self.beta) * utilization
         elif self.cost_function == "raam":
             # print("Rhos")
             # print((supply / (self.rho)))
             # print("Taus")
             # print(time / self.tau)
-            return (supply / (self.rho)) + (time / self.tau)
+            return (utilization / (self.rho)) + (time / self.tau)
         elif self.cost_function == "time":
             return time ** self.beta
         else:  # default to gravity
-            return (time ** self.beta) * supply
+            return (time ** self.beta) * utilization
 
     def calculate_mean_cost(self, time):
         """Calculate the agent's average cost per spatial unit"""
@@ -151,16 +151,16 @@ class AgentAccess:
             for travel_field in self.cost_field:
                 # add the small number to avoid division by zero
                 times[travel_field] = np.array([self.cost_df.loc[(geoid, index), travel_field] + 0.1 for index in reachable[travel_field]])
-            # calculate the supply (realistically supply/demand)
-            supplies = dict()
+            # calculate the utilization (realistically supply/demand)
+            utilization_dict = dict()
             for travel_field in self.cost_field:
-                supplies[travel_field] = np.array([self.rho for x in range(len(reachable[travel_field]))])  # use global PPR first time step, ratio afterwards
+                utilization_dict[travel_field] = np.array([self.rho for x in range(len(reachable[travel_field]))])  # use global PPR first time step, ratio afterwards
                 if time_step > 0:
                     steps_remembered = range(0, time_step)
                     if self.memory > 0:
                         steps_remembered = range(max(0, time_step - self.memory), time_step)
                     reachable_supplies = self.supply_df[self.supply_df.index.isin(reachable[travel_field])]
-                    supplies[travel_field] = np.array(reachable_supplies[[f"D/S Ratio {ts}" for ts in steps_remembered]].mean(axis=1))
+                    utilization_dict[travel_field] = np.array(reachable_supplies[[f"D/S Ratio {ts}" for ts in steps_remembered]].mean(axis=1))
             for a_index in agents_here:
                 # get the travel method for this agent
                 my_cost = self.demand_df.loc[a_index, "Cost Field"]
@@ -171,9 +171,9 @@ class AgentAccess:
                     self.demand_df.at[a_index, cost_col] = None
                     continue
                 time = times[my_cost]
-                supply = supplies[my_cost]
-                # print(geoid, my_cost, len(reachable[my_cost]), len(reachable[my_cost]), len(time), len(supply))
-                costs = self.calculate_costs(supply, time)
+                utilization = utilization_dict[my_cost]
+                # print(geoid, my_cost, len(reachable[my_cost]), len(reachable[my_cost]), len(time), len(utilization))
+                costs = self.calculate_costs(utilization, time)
                 if self.top_k > 0:
                     # get the minimum k costs
                     sorted_inds = costs.argsort()
@@ -286,7 +286,7 @@ class AgentAccess:
             chart_axes[0].axhline(self.rho, linestyle="--", color="r")
             if time > 0:
                 chart_axes[0].set_xlim(0, time)
-        chart_axes[0].set_title("Average Inverse PPR Ratio")
+        chart_axes[0].set_title("Average Utilization")
         # plot the time over time
         for index, row in self.spatial_units_df.iterrows():
             chart_axes[1].plot(range(time_steps), list(row[[f"Time {x}" for x in range(time_steps)]]), alpha=0.2)
@@ -312,6 +312,9 @@ class AgentAccess:
         images = []
         for plot in range(self.time_steps):
             images.append(imageio.imread(os.path.join(self.output_dir, "UI-{}.png".format(plot))))
+            if plot == self.time_steps - 1:  # if it's the last timestep
+                for i in range(6):  # add a three second pause on the result
+                    images.append(imageio.imread(os.path.join(self.output_dir, "UI-{}.png".format(plot))))
         imageio.mimsave(os.path.join(self.output_dir, 'movie.gif'), images, fps=2)
 
     def save_outputs(self):

@@ -4,14 +4,16 @@
 
 This project is working towards understanding accessibility through Agent-Based Modeling (ABM).
 
-## Functionalities:
+<hr />
 
-### Cost Functions
+# Functionalities:
+
+## Cost Functions
 
 Our cost functions take in the following arguments:
 
-* supply (s) the demand/supply ratio at location j
-* time (s) the time from location i to location j
+* time (t) the time from location i to location j
+* utilization (u) the demand/supply ratio at location j
 
 and there are a few parameters available for our cost functions:
 
@@ -24,11 +26,11 @@ some parameters are calculated by on input data including:
 
 Agent seek to minimize the "cost" (in travel/waiting time). The functions we hare implemented are:
 
-* `gravity` given by $$t^{\beta} / s$$
-* `raam` given by $$\frac{s}{\rho} + \frac{t}{\tau}$$
+* `gravity` given by $$t^{\beta} * u$$
+* `raam` given by $$\frac{u}{\rho} + \frac{t}{\tau}$$
 * `time` given by $$t^{\beta}$$
 
-### Multiple Travel Modalities
+## Multiple Travel Modalities
 
 Agents in the framework can have different travel modalities/travel times. This is achieved by setting `cost_df` to a DataFrame with multiple travel-cost columns and then passing a list of columns into `cost_field`. 
 
@@ -43,7 +45,10 @@ The model has a few parameters you can play with:
 * `pop_per_agent`: we will give each spatial unit population / pop_per_agent agents rounding up. 
 * `top_k`: agents will choose between the top_k best options, proportionally to their cost. So if k=1, they always choose the minimum cost option. If k=3, they choose between the three best options with probability inversely proportional to their costs. For example, if we have locations [i,j,k] with costs [1,2,2] we first invert the costs to get [1, 1/2, 1/2], then normalize to approxiately obtain [0.5, 0.25, 0.25] which are the probabilities the agent chooses [i,j,k] respectively.
 
-## Todo:
+<hr />
+
+# Todo:
+
 
 * Fix code to allow for incomplete travel dicts (i.e. for each GEOID get the possible destinations and only consider resources at those destinations)
 * Update statistics to better handle agents who were unable to make a choice
