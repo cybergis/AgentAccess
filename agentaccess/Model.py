@@ -29,7 +29,7 @@ class AgentAccess:
     def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
                  cost_df, cost_origin, cost_dest, cost_field, time_steps, cost_function="raam",
                  beta=2, memory=0, pop_per_agent=1000, tau=30, top_k=0, cost_prop=None, cost_prop_fields=None,
-                 output_path=None):
+                 output_path=None, plot=True):
         self.demand_df = demand_df
         self.demand_geoid = demand_geoid
         self.demand_field = demand_field
@@ -43,6 +43,7 @@ class AgentAccess:
         self.cost_prop = cost_prop
         self.cost_prop_fields = cost_prop_fields
         self.time_steps = time_steps
+        self.plot = plot
         # parameters
         self.beta = beta
         self.cost_function = cost_function
@@ -305,10 +306,14 @@ class AgentAccess:
         for i in tqdm(range(self.time_steps), position=0, desc="Running Model"):
             self.time_step(i)
         self.save_outputs()
-        self.save_gif()
+        if self.plot:
+            self.save_gif()
 
     def save_gif(self):
         """Creates and saves a gif from the outputs"""
+        if not self.plot:
+            print("Plot is set to False, so a gif cannot be made")
+            return
         images = []
         for plot in range(self.time_steps):
             images.append(imageio.imread(os.path.join(self.output_dir, "UI-{}.png".format(plot))))
@@ -355,4 +360,5 @@ class AgentAccess:
         """Runs a full time step of the model"""
         self.choose_resources(time)
         self.calculate_step_statistics(time)
-        self.plot_this_timestep(time)
+        if self.plot:
+            self.plot_this_timestep(time)
