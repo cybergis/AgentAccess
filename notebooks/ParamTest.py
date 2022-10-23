@@ -173,27 +173,16 @@ travel_times.head()
 # In[18]:
 
 
-# create the folder label:
-flabel = ""
-for k, v in paramDict.items():
-    flabel += f"{k}:{v}-"
-flabel = flabel[:-1]
-print(flabel)
+print(json.dumps(paramDict, sort_keys=True, indent=True))
 
 
 # In[19]:
 
 
-print(json.dumps(paramDict, sort_keys=True, indent=True))
-
-
-# In[ ]:
-
-
 # intialize our model
 # def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
 #              cost_df, cost_origin, cost_dest, cost_field, time_steps, memory=0, pop_per_agent=1000, top_k=0):
-for i in range(10):
+for i in range(1):
     random.seed(i)
     model = AgentAccess(
         pop,
@@ -213,7 +202,46 @@ for i in range(10):
         memory=0,
         pop_per_agent=paramDict["popPerAgent"],
         top_k=paramDict["myK"],
-        output_path="../outputs/ParamTest"
+        output_path="../outputs/ParamTest",
+        plot=False,
+        save_data=False
     )
     model.run_model()
+
+
+# In[20]:
+
+
+def average_columns(df, new_column, columns_to_average):
+    df[new_column] = df[columns_to_average].mean(axis=1)
+    return df
+
+
+# In[21]:
+
+
+# calculate averages for columns
+ts = paramDict["timeStep"]
+portions = [2, 3, 4]
+cols_to_average = ["Cost", "Time", "D/S Ratio"]
+cols_to_save = []
+df = model.spatial_units_df
+for port in portions:
+    for col in cols_to_average:
+        cols_to_save.append(f"{col}_{port}")
+        # average the last 1/port time steps
+        df = average_columns(df, f"{col}_{port}", [f"{col} {x}" for x  in range(ts-(ts//port), ts)])
+df = df[cols_to_save]
+
+
+# In[22]:
+
+
+df.head()
+
+
+# In[23]:
+
+
+df.to_csv(os.path.join(model.output_dir, "spatial_units.csv"))
 
