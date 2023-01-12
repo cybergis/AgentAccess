@@ -25,6 +25,28 @@ def is_jsonable(x):
         return False
 
 
+def calculate_costs(cost_function, utilization, time,
+                    beta=None, rho=None, tau=None):
+    """
+    Calculates the costs for each choice
+
+    TODO: remove this from the class
+    """
+    if cost_function == "gravity":
+        # inverse of classic gravity
+        return (time ** beta) * utilization
+    elif cost_function == "raam":
+        # print("Rhos")
+        # print((supply / (rho)))
+        # print("Taus")
+        # print(time / tau)
+        return (utilization / (rho)) + (time / tau)
+    elif cost_function == "time":
+        return time ** beta
+    else:  # default to gravity
+        return (time ** beta) * utilization
+
+
 class AgentAccess:
     def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
                  cost_df, cost_origin, cost_dest, cost_field, time_steps, cost_function="raam",
@@ -77,22 +99,6 @@ class AgentAccess:
         self.supply_df = self.supply_df.rename(columns={self.supply_field: "Supply"})
         self.supply_df = self.supply_df.dissolve(by="GEOID", aggfunc="sum")
 
-    def calculate_costs(self, utilization, time):
-        """Calculates the costs for each choice"""
-        if self.cost_function == "gravity":
-            # inverse of classic gravity
-            return (time ** self.beta) * utilization
-        elif self.cost_function == "raam":
-            # print("Rhos")
-            # print((supply / (self.rho)))
-            # print("Taus")
-            # print(time / self.tau)
-            return (utilization / (self.rho)) + (time / self.tau)
-        elif self.cost_function == "time":
-            return time ** self.beta
-        else:  # default to gravity
-            return (time ** self.beta) * utilization
-
     def calculate_mean_cost(self, time):
         """Calculate the agent's average cost per spatial unit"""
         cost_field = f"Cost {time}"
@@ -135,10 +141,15 @@ class AgentAccess:
         self.mean_agent_time(time)
 
     def choose_resources(self, time_step):
-        """Chooses the resource for each agent randomly using gravity models as probability"""
+        """
+        Chooses the resource for each agent randomly using gravity models as probability
+
+        TODO: parallelize
+        """
         locations = list(set(self.demand_df["GEOID"]))
         choice_col, cost_col = f"Choice {time_step}", f"Cost {time_step}"
         self.demand_df[choice_col] = ""
+        # add multiprocessing here
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
         for geoid in locations:
             agents_here = self.demand_df[self.demand_df["GEOID"] == geoid].index
@@ -175,7 +186,8 @@ class AgentAccess:
                 time = times[my_cost]
                 utilization = utilization_dict[my_cost]
                 # print(geoid, my_cost, len(reachable[my_cost]), len(reachable[my_cost]), len(time), len(utilization))
-                costs = self.calculate_costs(utilization, time)
+                costs = calculate_costs(self.cost_function, utilization, time,
+                                        beta=self.beta, rho=self.rho, tau=self.tau)
                 if self.top_k > 0:
                     # get the minimum k costs
                     sorted_inds = costs.argsort()
