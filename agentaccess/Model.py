@@ -11,6 +11,7 @@ import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
+import time as pytime
 from tqdm import tqdm
 
 
@@ -25,12 +26,53 @@ def is_jsonable(x):
         return False
 
 
+def calculate_options(time_step, geoid, cost_df, cost_field, supply_df, memory, rho):
+    """
+    Calculates key statistics for the options (reachable, times, utilization)
+    for a given geoid.
+
+    Args:
+        time_step (int): the time step of the simulation
+        geoid (str): the geoid for this location
+        cost_df (pd.DataFrame): dataframe of the travel costs between locations
+        cost_field (str): the column in `cost_df` corresponding to the cost
+        supply_df (gpd.GeoDataFrame): GeoDataFrame of supply options
+        memory (int): number of time steps to remember utilization
+        rho (float): overall utilization rate
+
+    Returns:
+        reachable (dict): a dictionary of lists giving the supply options for each mode of transportation
+        times (dict): a dictionary of lists giving the costs/times to reach supply options
+        utilization_dict (dict): a map giving the utilization of each reachable supply for each travel mode
+    """
+    # calculate what is reachable from this location
+    reachable = dict()
+    for travel_method in cost_field:
+        travel_from_here = cost_df.loc[geoid]
+        # get the geoids I can reach
+        reachable[travel_method] = travel_from_here[travel_from_here[travel_method].notna()].index
+    # get travel time for each method
+    times = dict()
+    for travel_field in cost_field:
+        # add the small number to avoid division by zero
+        times[travel_field] = np.array([cost_df.loc[(geoid, index), travel_field] + 0.1 for index in reachable[travel_field]])
+    # calculate the utilization (realistically supply/demand)
+    utilization_dict = dict()
+    for travel_field in cost_field:
+        utilization_dict[travel_field] = np.array([rho for x in range(len(reachable[travel_field]))])  # use global PPR first time step, ratio afterwards
+        if time_step > 0:
+            steps_remembered = range(0, time_step)
+            if memory > 0:
+                steps_remembered = range(max(0, time_step - memory), time_step)
+            reachable_supplies = supply_df[supply_df.index.isin(reachable[travel_field])]
+            utilization_dict[travel_field] = np.array(reachable_supplies[[f"D/S Ratio {ts}" for ts in steps_remembered]].mean(axis=1))
+    return reachable, times, utilization_dict
+
+
 def calculate_costs(cost_function, utilization, time,
-                    beta=None, rho=None, tau=None):
+                    beta=1, rho=None, tau=None):
     """
     Calculates the costs for each choice
-
-    TODO: remove this from the class
     """
     if cost_function == "gravity":
         # inverse of classic gravity
@@ -45,6 +87,66 @@ def calculate_costs(cost_function, utilization, time,
         return time ** beta
     else:  # default to gravity
         return (time ** beta) * utilization
+
+
+def determine_choices(time_step, geoid, cost_df, cost_field, demand_df, supply_df,
+                      cost_function, beta, memory, rho, tau, top_k):
+    """
+    Given information about the locations, determine the choice each agent makes
+
+    Args:
+        time_step (int): the time step of the simulation
+        geoid (str): the geoid for this location
+        cost_df (pd.DataFrame): dataframe of the travel costs between locations
+        cost_field (str): the column in `cost_df` corresponding to the cost
+        demand_df (gpd.GeoDataFrame): GeoDataFrame of demand locations
+        supply_df (gpd.GeoDataFrame): GeoDataFrame of supply options
+        cost_function (str): function to use to determine costs
+        beta (float): power for distance decay
+        memory (int): number of time steps to remember utilization
+        rho (float): overall utilization rate
+        tau (float): time trade-off parameter for RAAM
+        top_k (int): how many options each agent should consider
+
+    Returns:
+        reachable (dict): a dictionary of lists giving the supply options for each mode of transportation
+        times (dict): a dictionary of lists giving the costs/times to reach supply options
+        utilization_dict (dict): a map giving the utilization of each reachable supply for each travel mode
+    """
+    choice_col, cost_col = f"Choice {time_step}", f"Cost {time_step}"
+    reachable, times, utilization_dict = calculate_options(time_step, geoid, cost_df, cost_field,
+                                                           supply_df, memory, rho)
+    agents_here = demand_df[demand_df["GEOID"] == geoid].index
+    choice_dict = {}
+    for a_index in agents_here:
+        # get the travel method for this agent
+        my_cost = demand_df.loc[a_index, "Cost Field"]
+        # get the times and supplies for all places I can reach
+        resources_to_consider = reachable[my_cost]
+        if len(resources_to_consider) == 0:
+            choice_dict[a_index, choice_col] = None
+            choice_dict[a_index, cost_col] = None
+            continue
+        time = times[my_cost]
+        utilization = utilization_dict[my_cost]
+        # print(geoid, my_cost, len(reachable[my_cost]), len(reachable[my_cost]), len(time), len(utilization))
+        costs = calculate_costs(cost_function, utilization, time,
+                                beta=beta, rho=rho, tau=tau)
+        if top_k > 0:
+            # get the minimum k costs
+            sorted_inds = costs.argsort()
+            ind = sorted_inds[:top_k]
+            resources_to_consider = resources_to_consider[ind]
+            costs = costs[ind]
+        # probabilities are inverse to costs
+        resource_probabilities = 1 / costs
+        # print(resource_probabilities)
+        resource_probabilities = resource_probabilities / sum(resource_probabilities)
+        # print(resource_probabilities)
+        choice_ind = np.random.choice(range(len(resource_probabilities)), p=resource_probabilities)
+        choice_dict[a_index, choice_col] = resources_to_consider[choice_ind]
+        choice_dict[a_index, cost_col] = costs[choice_ind]
+    return choice_dict
 
 
 class AgentAccess:
@@ -148,60 +250,20 @@ class AgentAccess:
         """
         locations = list(set(self.demand_df["GEOID"]))
         choice_col, cost_col = f"Choice {time_step}", f"Cost {time_step}"
-        self.demand_df[choice_col] = ""
+        self.demand_df[choice_col], self.demand_df[cost_col] = "", 0  # set as blank for now to create column
         # add multiprocessing here
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
-        for geoid in locations:
-            agents_here = self.demand_df[self.demand_df["GEOID"] == geoid].index
-            # calculate what is reachable from this location
-            reachable = dict()
-            for travel_method in self.cost_field:
-                travel_from_here = self.cost_df.loc[geoid]
-                # get the geoids I can reach
-                reachable[travel_method] = travel_from_here[travel_from_here[travel_method].notna()].index
-            # get travel time for each method
-            times = dict()
-            for travel_field in self.cost_field:
-                # add the small number to avoid division by zero
-                times[travel_field] = np.array([self.cost_df.loc[(geoid, index), travel_field] + 0.1 for index in reachable[travel_field]])
-            # calculate the utilization (realistically supply/demand)
-            utilization_dict = dict()
-            for travel_field in self.cost_field:
-                utilization_dict[travel_field] = np.array([self.rho for x in range(len(reachable[travel_field]))])  # use global PPR first time step, ratio afterwards
-                if time_step > 0:
-                    steps_remembered = range(0, time_step)
-                    if self.memory > 0:
-                        steps_remembered = range(max(0, time_step - self.memory), time_step)
-                    reachable_supplies = self.supply_df[self.supply_df.index.isin(reachable[travel_field])]
-                    utilization_dict[travel_field] = np.array(reachable_supplies[[f"D/S Ratio {ts}" for ts in steps_remembered]].mean(axis=1))
-            for a_index in agents_here:
-                # get the travel method for this agent
-                my_cost = self.demand_df.loc[a_index, "Cost Field"]
-                # get the times and supplies for all places I can reach
-                resources_to_consider = reachable[my_cost]
-                if len(resources_to_consider) == 0:
-                    self.demand_df.at[a_index, choice_col] = None
-                    self.demand_df.at[a_index, cost_col] = None
-                    continue
-                time = times[my_cost]
-                utilization = utilization_dict[my_cost]
-                # print(geoid, my_cost, len(reachable[my_cost]), len(reachable[my_cost]), len(time), len(utilization))
-                costs = calculate_costs(self.cost_function, utilization, time,
-                                        beta=self.beta, rho=self.rho, tau=self.tau)
-                if self.top_k > 0:
-                    # get the minimum k costs
-                    sorted_inds = costs.argsort()
-                    ind = sorted_inds[:self.top_k]
-                    resources_to_consider = resources_to_consider[ind]
-                    costs = costs[ind]
-                # probabilities are inverse to costs
-                resource_probabilities = 1 / costs
-                # print(resource_probabilities)
-                resource_probabilities = resource_probabilities / sum(resource_probabilities)
-                # print(resource_probabilities)
-                choice_ind = np.random.choice(range(len(resource_probabilities)), p=resource_probabilities)
-                self.demand_df.at[a_index, choice_col] = resources_to_consider[choice_ind]
-                self.demand_df.at[a_index, cost_col] = costs[choice_ind]
+        all_choices = {}
+        t0 = pytime.time()
+        for geoid in tqdm(locations, desc="Choices", position=0):
+            choices_dict = determine_choices(time_step, geoid, self.cost_df, self.cost_field, self.demand_df, self.supply_df,
+                                             self.cost_function, self.beta, self.memory, self.rho, self.tau, self.top_k)
+            all_choices = {**all_choices, **choices_dict}
+        # merge the dictionaries
+        for a_index in tqdm(self.demand_df.index, desc="recording", position=0):
+            self.demand_df.at[a_index, choice_col] = all_choices[a_index, choice_col]
+            self.demand_df.at[a_index, cost_col] = all_choices[a_index, cost_col]
+        print(f"Total elapsed time: {pytime.time()-t0}")
 
     def create_output_directory(self):
         """Creates the output directory for the model"""
