@@ -3,10 +3,12 @@ import copy
 from datetime import datetime
 import geopandas as gpd
 import imageio
+from itertools import repeat
 import json
 import math
 from matplotlib import gridspec
 import matplotlib.pyplot as plt
+import multiprocessing as mp
 import numpy as np
 import os
 import pandas as pd
@@ -149,11 +151,18 @@ def determine_choices(time_step, geoid, cost_df, cost_field, demand_df, supply_d
     return choice_dict
 
 
+def determine_choices_unpacker(args):
+    """
+    Simple unpacker for calling the `determine_choices` function using multiprocessing
+    """
+    return determine_choices(*args)
+
+
 class AgentAccess:
     def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
                  cost_df, cost_origin, cost_dest, cost_field, time_steps, cost_function="raam",
                  beta=2, memory=0, pop_per_agent=1000, tau=30, top_k=0, cost_prop=None, cost_prop_fields=None,
-                 output_path=None, plot=True, save_data=True):
+                 output_path=None, plot=True, processes=1, save_data=True):
         self.demand_df = demand_df
         self.demand_geoid = demand_geoid
         self.demand_field = demand_field
@@ -174,6 +183,7 @@ class AgentAccess:
         self.cost_function = cost_function
         self.memory = memory
         self.pop_per_agent = pop_per_agent
+        self.processes = int(processes)
         self.top_k = top_k
         # RAAM params
         self.tau = tau
@@ -245,8 +255,6 @@ class AgentAccess:
     def choose_resources(self, time_step):
         """
         Chooses the resource for each agent randomly using gravity models as probability
-
-        TODO: parallelize
         """
         locations = list(set(self.demand_df["GEOID"]))
         choice_col, cost_col = f"Choice {time_step}", f"Cost {time_step}"
@@ -255,10 +263,33 @@ class AgentAccess:
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
         all_choices = {}
         t0 = pytime.time()
-        for geoid in tqdm(locations, desc="Choices", position=0):
-            choices_dict = determine_choices(time_step, geoid, self.cost_df, self.cost_field, self.demand_df, self.supply_df,
-                                             self.cost_function, self.beta, self.memory, self.rho, self.tau, self.top_k)
-            all_choices = {**all_choices, **choices_dict}
+        if self.processes < 2:
+            print("using regular version....")
+            for geoid in tqdm(locations, desc="Choices", position=0):
+                choices_dict = determine_choices(time_step, geoid, self.cost_df, self.cost_field, copy.deepcopy(self.demand_df), self.supply_df,
+                                                self.cost_function, self.beta, self.memory, self.rho, self.tau, self.top_k)
+                all_choices = {**all_choices, **choices_dict}
+        else:
+            print("using multiprocessing version....")
+            pool = mp.Pool(processes=self.processes)
+            results = pool.map(determine_choices_unpacker, zip(
+                repeat(time_step),
+                locations,
+                repeat(self.cost_df),
+                repeat(self.cost_field),
+                repeat(copy.deepcopy(self.demand_df)),
+                repeat(self.supply_df),
+                repeat(self.cost_function),
+                repeat(self.beta),
+                repeat(self.memory),
+                repeat(self.rho),
+                repeat(self.tau),
+                repeat(self.top_k)            
+            ))
+            for result in results:  # add to the all_choices dict
+                all_choices = {**all_choices, **result}
+            pool.close()
+            pool.terminate()
         # merge the dictionaries
         for a_index in tqdm(self.demand_df.index, desc="recording", position=0):
             self.demand_df.at[a_index, choice_col] = all_choices[a_index, choice_col]
