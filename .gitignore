@@ -2,6 +2,7 @@
 data/travel_times/17031-output-TRACT-CAR.csv
 data/svi/SVI2018_US_tract.*
 outputs/*
+slurm*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

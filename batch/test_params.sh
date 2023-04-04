@@ -9,7 +9,9 @@ timeSteps=$(seq 10 5 30)
 # the top k options
 topK=$(seq 1 5)
 # the population-to-agent ratio
-numAgents=("1000" "100" "10" "1")
+#numAgents=("1000" "100" "10" "1")
+#numAgents=("1000" "100" "10")
+numAgents=("1")
 # number of times to perform the analysis for each
 # seeds=$(seq 1 10)
 
@@ -25,6 +27,7 @@ for cf in ${costFuncs[@]}; do
         printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
         sbatch batch/runWithParams.batch
         let counter+=1
+        sleep 1
       done
     done
   done

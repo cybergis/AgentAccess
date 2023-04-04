@@ -6,6 +6,11 @@ This project is working towards understanding accessibility through Agent-Based 
 
 <hr />
 
+# Quick Start
+
+Run `setup.sh` to unpack the data and setup the environment.
+
+
 # Functionalities:
 
 ## Cost Functions

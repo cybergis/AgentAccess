@@ -1,4 +1,3 @@
-
 #!/bin/tcsh
 #SBATCH --job-name=agacc
 #SBATCH -n 1
