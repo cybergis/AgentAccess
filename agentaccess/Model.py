@@ -13,7 +13,7 @@ import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
-import time as pytime
+import time as pytime  # noqa
 from tqdm import tqdm
 
 
@@ -262,15 +262,16 @@ class AgentAccess:
         # add multiprocessing here
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
         all_choices = {}
-        t0 = pytime.time()
+        # t0 = pytime.time()
         if self.processes < 2:
-            print("using regular version....")
-            for geoid in tqdm(locations, desc="Choices", position=0):
+            # print("using regular version....")
+            # for geoid in tqdm(locations, desc="Choices", position=0):
+            for geoid in locations:
                 choices_dict = determine_choices(time_step, geoid, self.cost_df, self.cost_field, copy.deepcopy(self.demand_df), self.supply_df,
-                                                self.cost_function, self.beta, self.memory, self.rho, self.tau, self.top_k)
+                                                 self.cost_function, self.beta, self.memory, self.rho, self.tau, self.top_k)
                 all_choices = {**all_choices, **choices_dict}
         else:
-            print("using multiprocessing version....")
+            # print("using multiprocessing version....")
             pool = mp.Pool(processes=self.processes)
             results = pool.map(determine_choices_unpacker, zip(
                 repeat(time_step),
@@ -284,17 +285,18 @@ class AgentAccess:
                 repeat(self.memory),
                 repeat(self.rho),
                 repeat(self.tau),
-                repeat(self.top_k)            
+                repeat(self.top_k)
             ))
             for result in results:  # add to the all_choices dict
                 all_choices = {**all_choices, **result}
             pool.close()
             pool.terminate()
         # merge the dictionaries
-        for a_index in tqdm(self.demand_df.index, desc="recording", position=0):
+        # for a_index in tqdm(self.demand_df.index, desc="recording", position=0):
+        for a_index in self.demand_df.index:
             self.demand_df.at[a_index, choice_col] = all_choices[a_index, choice_col]
             self.demand_df.at[a_index, cost_col] = all_choices[a_index, cost_col]
-        print(f"Total elapsed time: {pytime.time()-t0}")
+        # print(f"Total elapsed time: {pytime.time()-t0}")
 
     def create_output_directory(self):
         """Creates the output directory for the model"""
