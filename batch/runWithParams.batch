@@ -10,5 +10,5 @@
 module purge
 cd ~/AgentAccess/notebooks
 source ~/.bashrc
-conda activate access
+conda activate agentaccess
 python ParamTest.py
