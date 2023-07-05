@@ -28,9 +28,9 @@ for cf in ${costFuncs[@]}; do
       for nagents in ${numAgents[@]}; do
         export popPerAgent=$nagents
         printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
-        # sbatch batch/runWithParams.batch
+        sbatch batch/runWithParams.batch
         let counter+=1
-        # sleep 1
+        sleep 1
       done
     done
   done
@@ -38,21 +38,3 @@ done
 
 echo "Submitted ${counter} jobs."
 
-
-# for cf in ${costFuncs[@]}; do
-#   export costFunc=$cf
-#   for time in ${timeSteps[@]}; do
-#     export timeStep=$time
-#     for k in ${topK[@]}; do
-#       export myK=$k
-#       for nagents in ${numAgents[@]}; do
-#         export popPerAgent=$nagents
-#         for s in ${seeds[@]}; do 
-#           export seed=$s
-#           printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n * seed: ${seed}\n"
-#           let counter+=1
-#         done
-#       done
-#     done
-#   done
-# done
