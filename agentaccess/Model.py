@@ -58,7 +58,7 @@ def calculate_options(time_step, geoid, cost_df, cost_field, supply_df, memory, 
     for travel_field in cost_field:
         # add the small number to avoid division by zero
         times[travel_field] = np.array([cost_df.loc[(geoid, index), travel_field] + 0.1 for index in reachable[travel_field]])
-    # calculate the utilization (realistically supply/demand)
+    # calculate the utilization (realistically demand/supply)
     utilization_dict = dict()
     for travel_field in cost_field:
         utilization_dict[travel_field] = np.array([rho for x in range(len(reachable[travel_field]))])  # use global PPR first time step, ratio afterwards
@@ -78,6 +78,7 @@ def calculate_costs(cost_function, utilization, time,
     """
     if cost_function == "gravity":
         # inverse of classic gravity
+        # return (time ** beta) * (utilization / rho)  # normalize by rho
         return (time ** beta) * utilization
     elif cost_function == "raam":
         # print("Rhos")
@@ -388,20 +389,21 @@ class AgentAccess:
             ax.set_title(f"{col[:-2]} at Time Step {time}")
             ax.axis('off')
         chart_axes = [fig.add_subplot(gs[2, x]) for x in [0, 1]]
-        # plot the ratio over time
         time_steps = time + 1
+        # plot the cost over time
         for index, row in self.spatial_units_df.iterrows():
-            chart_axes[0].plot(range(time_steps), list(row[[f"D/S Ratio {x}" for x in range(time_steps)]]), alpha=0.2)
-            chart_axes[0].axhline(self.rho, linestyle="--", color="r")
+            chart_axes[0].plot(range(time_steps), list(row[[f"Cost {x}" for x in range(time_steps)]]), alpha=0.2)
             if time > 0:
                 chart_axes[0].set_xlim(0, time)
-        chart_axes[0].set_title("Average Utilization")
-        # plot the time over time
+        chart_axes[0].plot(range(time_steps), [np.mean(self.spatial_units_df[f"Cost {x}"]) for x in range(time_steps)], linestyle="--", color="r")
+        chart_axes[0].set_title("Average Cost")
+        # plot the ratio over time
         for index, row in self.spatial_units_df.iterrows():
-            chart_axes[1].plot(range(time_steps), list(row[[f"Time {x}" for x in range(time_steps)]]), alpha=0.2)
+            chart_axes[1].plot(range(time_steps), list(row[[f"D/S Ratio {x}" for x in range(time_steps)]]), alpha=0.2)
+            chart_axes[1].axhline(self.rho, linestyle="--", color="r")
             if time > 0:
                 chart_axes[1].set_xlim(0, time)
-        chart_axes[1].set_title("Average Time to Resource")
+        chart_axes[1].set_title("Average Utilization")
         plt.tight_layout()
         if save:
             plt.savefig(os.path.join(self.output_dir, f"UI-{time}.png"), dpi=100)
