@@ -382,11 +382,12 @@ class AgentAccess:
         # fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(18, 6))
         map_axes = [fig.add_subplot(gs[0:2, x]) for x in [0, 1]]
         columns = [f"Cost {time}", f"Time {time}"]
+        titles = [f"Mean Cost at Time Step {time}", f"Mean Travel Time at Time Step {time}"]
         geodataframes = [self.spatial_units_df, self.spatial_units_df]
-        for ax, col, data in zip(map_axes, columns, geodataframes):
-            ax = data.plot(ax=ax, column=col, legend=True, legend_kwds={'fraction': 0.046, 'pad': 0.04})
+        for ax, col, data, title in zip(map_axes, columns, geodataframes, titles):
+            ax = data.plot(ax=ax, column=col, legend=True, legend_kwds={'pad': 0.02, 'shrink': .85})
             cx.add_basemap(ax, crs=data.crs.to_string())
-            ax.set_title(f"{col[:-2]} at Time Step {time}")
+            ax.set_title(title)
             ax.axis('off')
         chart_axes = [fig.add_subplot(gs[2, x]) for x in [0, 1]]
         time_steps = time + 1
@@ -404,9 +405,10 @@ class AgentAccess:
             if time > 0:
                 chart_axes[1].set_xlim(0, time)
         chart_axes[1].set_title("Average Utilization")
+        fig.subplots_adjust(hspace=0, wspace=0)
         plt.tight_layout()
         if save:
-            plt.savefig(os.path.join(self.output_dir, f"UI-{time}.png"), dpi=100)
+            plt.savefig(os.path.join(self.output_dir, f"UI-{time}.png"), dpi=100, bbox_inches='tight')
         if show:
             plt.show()
         plt.close('all')
