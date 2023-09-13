@@ -4,6 +4,7 @@
 
 # the cost functions to evaluate
 costFuncs=("gravity" "raam")
+#costFuncs=("raam")
 # the range of time steps to try [start] [count-by] [end]
 timeSteps=$(seq 10 5 30)
 # the top k options
@@ -27,7 +28,11 @@ for cf in ${costFuncs[@]}; do
       export myK=$k
       for nagents in ${numAgents[@]}; do
         export popPerAgent=$nagents
-        printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
+        #while [ $(squeue -u michels9 | wc -l) -gt 7 ]; do
+  	#	squeue -u michels9
+  	#	sleep 600;
+	#done;
+	printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
         sbatch batch/runWithParams.batch
         let counter+=1
         sleep 1

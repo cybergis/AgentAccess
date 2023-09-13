@@ -186,7 +186,7 @@ def average_columns(df, new_column, columns_to_average):
 # intialize our model
 # def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
 #              cost_df, cost_origin, cost_dest, cost_field, time_steps, memory=0, pop_per_agent=1000, top_k=0):
-for i in range(0,1):
+for i in range(0,5):
     random.seed(i)
     model = AgentAccess(
         pop,
@@ -208,7 +208,7 @@ for i in range(0,1):
         pop_per_agent=paramDict["popPerAgent"],
         tau=60,
         top_k=paramDict["myK"],
-        output_path="../outputs/ParamTest_OnlyCars",
+        output_path="../outputs/ParamTest_OnlyCars5",
         plot=False,
         save_data=False
     )
