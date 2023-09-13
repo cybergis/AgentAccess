@@ -14,7 +14,7 @@ numAgents=("1000" "100" "10" "1")
 #numAgents=("1000" "100" "10")
 # numAgents=("1")
 # number of times to perform the analysis for each
-# seeds=$(seq 1 10)
+seeds=$(seq 1 5)
 
 # counter should be: 200
 # 2 cost funcs x 5 ts x 5 topk x 4 agent
@@ -28,14 +28,13 @@ for cf in ${costFuncs[@]}; do
       export myK=$k
       for nagents in ${numAgents[@]}; do
         export popPerAgent=$nagents
-        #while [ $(squeue -u michels9 | wc -l) -gt 7 ]; do
-  	#	squeue -u michels9
-  	#	sleep 600;
-	#done;
-	printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
-        sbatch batch/runWithParams.batch
-        let counter+=1
-        sleep 1
+        for seedval in ${seeds[@]}; do
+            export seedval
+            printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * ${seedval}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
+            sbatch batch/runWithParams.batch
+            let counter+=1
+            sleep 1
+        done
       done
     done
   done

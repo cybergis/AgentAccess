@@ -27,10 +27,13 @@ for cf in ${costFuncs[@]}; do
       export myK=$k
       for nagents in ${numAgents[@]}; do
         export popPerAgent=$nagents
-        printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
-        sbatch batch/runWithParams_NoVeh.batch
-        let counter+=1
-        sleep 1
+        for seedval in ${seeds[@]}; do
+            export seedval
+            printf "Running job with:\n * costFunc: ${costFunc}\n * PopPerAgent: ${popPerAgent}\n * ${seedval}\n * timeStep: ${timeStep}\n * top_k: ${myK}\n"
+            sbatch batch/runWithParams_NoVeh.batch
+            let counter+=1
+            sleep 1
+        done
       done
     done
   done
