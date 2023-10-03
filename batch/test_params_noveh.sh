@@ -3,8 +3,8 @@
 # Purpose: Loops through parameter options and submits jobs with those parameters.
 
 # the cost functions to evaluate
-#costFuncs=("gravity" "raam")
-costFuncs=("raam")
+costFuncs=("gravity" "raam")
+# costFuncs=("raam")
 # the range of time steps to try [start] [count-by] [end]
 timeSteps=$(seq 10 5 30)
 # the top k options
@@ -14,7 +14,7 @@ numAgents=("1000" "100" "10" "1")
 #numAgents=("1000" "100" "10")
 # numAgents=("1")
 # number of times to perform the analysis for each
-# seeds=$(seq 1 10)
+seeds=$(seq 1 5)
 
 # counter should be: 200
 # 2 cost funcs x 5 ts x 5 topk x 4 agent
