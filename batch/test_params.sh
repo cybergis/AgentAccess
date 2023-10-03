@@ -3,8 +3,8 @@
 # Purpose: Loops through parameter options and submits jobs with those parameters.
 
 # the cost functions to evaluate
-costFuncs=("gravity" "raam")
-#costFuncs=("raam")
+#costFuncs=("gravity" "raam")
+costFuncs=("raam")
 # the range of time steps to try [start] [count-by] [end]
 timeSteps=$(seq 10 5 30)
 # the top k options
