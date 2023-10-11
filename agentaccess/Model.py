@@ -206,11 +206,14 @@ class AgentAccess:
         """Takes a GeoDataFrame of resources and spatially joins to spatial units, then aggregates the values giving us a lookup of GEOID -> number of resources"""
         if self.spatial_units_df is None:
             self.get_spatial_units()
+        pre_sum = sum(self.supply_df[self.supply_field])
         self.supply_df = self.supply_df[self.supply_df[self.supply_field] >= 0]
-        self.supply_df = gpd.sjoin(self.spatial_units_df, self.supply_df, how="inner", predicate="intersects")
+        self.supply_df = gpd.sjoin(self.spatial_units_df, self.supply_df, how="inner", predicate="contains")
         self.supply_df = self.supply_df[[self.supply_field, "geometry"]]
         self.supply_df = self.supply_df.rename(columns={self.supply_field: "Supply"})
         self.supply_df = self.supply_df.dissolve(by="GEOID", aggfunc="sum")
+        post_sum = sum(self.supply_df["Supply"])
+        assert pre_sum == post_sum  # ensure we didn't lose/add supply
 
     def calculate_mean_cost(self, time):
         """Calculate the agent's average cost per spatial unit"""
