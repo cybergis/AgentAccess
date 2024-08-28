@@ -341,7 +341,7 @@ class AgentAccess:
             elif distr["distribution"] == "uniform":
                 add_param_distributions[param] = lambda : np.random.uniform(distr["min"], distr["max"])
             else:
-                raise Exception(f"{distr["distribution"]} is not a supported distribution. Supported: [constant, uniform]")
+                raise Exception(f"{distr['distribution']} is not a supported distribution. Supported: [constant, uniform]")
         agent_counter = 0
         for index, row in self.demand_df.iterrows():
             # get this row's ID
