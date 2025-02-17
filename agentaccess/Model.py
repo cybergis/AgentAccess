@@ -334,6 +334,7 @@ class AgentAccess:
             proportions = [1 / len(self.cost_field) for i in self.cost_field]
             self.cost_prop = np.array(proportions)
         # figure out the additional parameters
+        # TODO: split this into a different function
         add_param_distributions = dict()
         for param, distr in self.addl_params.items():
             if distr["distribution"] == "constant":
@@ -412,7 +413,7 @@ class AgentAccess:
         geodataframes = [self.spatial_units_df, self.spatial_units_df]
         for ax, col, data, title in zip(map_axes, columns, geodataframes, titles):
             ax = data.plot(ax=ax, column=col, legend=True, legend_kwds={'pad': 0.02, 'shrink': .85})
-            cx.add_basemap(ax, crs=data.crs.to_string())
+            # cx.add_basemap(ax, crs=data.crs.to_string())
             ax.set_title(title)
             ax.axis('off')
         chart_axes = [fig.add_subplot(gs[2, x]) for x in [0, 1]]

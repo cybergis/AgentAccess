@@ -12,4 +12,5 @@ cd $curr_dir
 # unzip the SVI data
 cd svi/
 unzip -o SVI2018_US_CT.zip
+unzip -o SVI_2022_US_CT.zip
 cd $curr_dir

@@ -208,7 +208,7 @@ model = AgentAccess(
     pop_per_agent=paramDict["popPerAgent"],
     tau=60,
     top_k=paramDict["myK"],
-    output_path="../outputs/ParamTest_NoVeh5",
+    output_path="/data/keeling/a/michels9/common/michels9/AgentAccess/outputs/ParamTest/NoVeh/",
     plot=False,
     save_data=False
 )

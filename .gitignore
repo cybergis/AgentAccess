@@ -1,6 +1,7 @@
 # My stuff
 data/travel_times/17031-output-TRACT-CAR.csv
 data/svi/SVI2018_US_tract.*
+data/svi/SVI2022_US_tract.gdb
 outputs/*
 slurm*
 
