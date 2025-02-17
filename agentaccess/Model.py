@@ -187,11 +187,14 @@ class AgentAccess:
         self.processes = int(processes)
         self.top_k = top_k
         # checking that cost function params exist
+        # TODO: verify that passed in params work as well
         if self.addl_params is None:
             if self.cost_function == "gravity":
-                self.addl_params = {"beta": {"distribution": "uniform", "min": 1, "max": 3}}
+                # self.addl_params = {"beta": {"distribution": "uniform", "min": 1, "max": 3}}
+                self.addl_params = {"beta": {"distribution": "constant", "value": 2}}
             elif self.cost_function == "raam":
-                self.addl_params = {"tau": {"distribution": "uniform", "min": 25, "max": 35}}
+                # self.addl_params = {"tau": {"distribution": "uniform", "min": 25, "max": 35}}
+                self.addl_params = {"tau": {"distribution": "constant", "value": 30}}
         # verify that cost functions have the necessary addl_params
         if self.cost_function in ["gravity", "time"]:
             assert "beta" in self.addl_params.keys()

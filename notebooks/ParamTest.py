@@ -206,7 +206,6 @@ model = AgentAccess(
 #    cost_prop_fields=["vehicle", "E_NOVEH"],
     memory=0,
     pop_per_agent=paramDict["popPerAgent"],
-    tau=60,
     top_k=paramDict["myK"],
     output_path="/data/keeling/a/michels9/common/michels9/AgentAccess/outputs/ParamTest/OnlyCars/",
     plot=False,
