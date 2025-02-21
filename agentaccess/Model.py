@@ -107,7 +107,7 @@ def determine_choices(time_step, geoid, cost_df, cost_field, demand_df, supply_d
         memory (int): number of time steps to remember utilization
         rho (float): overall utilization rate
         top_k (int): how many options each agent should consider
-        addl_params (dict):
+        addl_cost_params (dict):
             * beta (float): power for distance decay
             * tau (float): time trade-off parameter for RAAM
 
@@ -161,7 +161,7 @@ def determine_choices_unpacker(args):
 class AgentAccess:
     def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
                  cost_df, cost_origin, cost_dest, cost_field, time_steps, cost_function="raam",
-                 addl_params=None, 
+                 addl_cost_params=None, 
                  memory=0, pop_per_agent=1000, top_k=0, cost_prop=None, cost_prop_fields=None,
                  output_path=None, plot=True, processes=1, save_data=True):
         self.demand_df = demand_df
@@ -180,7 +180,7 @@ class AgentAccess:
         self.plot = plot
         self.save_data = save_data
         # parameters
-        self.addl_params = addl_params
+        self.addl_cost_params = addl_cost_params
         self.cost_function = cost_function
         self.memory = memory
         self.pop_per_agent = pop_per_agent
@@ -188,18 +188,18 @@ class AgentAccess:
         self.top_k = top_k
         # checking that cost function params exist
         # TODO: verify that passed in params work as well
-        if self.addl_params is None:
+        if self.addl_cost_params is None:
             if self.cost_function == "gravity":
-                # self.addl_params = {"beta": {"distribution": "uniform", "min": 1, "max": 3}}
-                self.addl_params = {"beta": {"distribution": "constant", "value": 2}}
+                # self.addl_cost_params = {"beta": {"distribution": "uniform", "min": 1, "max": 3}}
+                self.addl_cost_params = {"beta": {"distribution": "constant", "value": 2}}
             elif self.cost_function == "raam":
-                # self.addl_params = {"tau": {"distribution": "uniform", "min": 25, "max": 35}}
-                self.addl_params = {"tau": {"distribution": "constant", "value": 30}}
-        # verify that cost functions have the necessary addl_params
+                # self.addl_cost_params = {"tau": {"distribution": "uniform", "min": 25, "max": 35}}
+                self.addl_cost_params = {"tau": {"distribution": "constant", "value": 30}}
+        # verify that cost functions have the necessary addl_cost_params
         if self.cost_function in ["gravity", "time"]:
-            assert "beta" in self.addl_params.keys()
+            assert "beta" in self.addl_cost_params.keys()
         elif self.cost_function == "raam":
-            assert "tau" in self.addl_params.keys()
+            assert "tau" in self.addl_cost_params.keys()
         # I/O
         self.output_path = output_path
         self.create_output_directory()
@@ -274,7 +274,7 @@ class AgentAccess:
         """
         locations = list(set(self.demand_df["GEOID"]))
         choice_col, cost_col = f"Choice {time_step}", f"Cost {time_step}"
-        self.demand_df[choice_col], self.demand_df[cost_col] = "", 0  # set as blank for now to create column
+        self.demand_df[choice_col], self.demand_df[cost_col] = "", 0.0  # set as blank for now to create column
         # add multiprocessing here
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
         all_choices = {}
@@ -297,11 +297,11 @@ class AgentAccess:
                 repeat(copy.deepcopy(self.demand_df)),
                 repeat(self.supply_df),
                 repeat(self.cost_function),
-                # repeat(self.beta),  # moved to demand_df addl_params
-                repeat(self.memory),  # TODO: move memory to addl_params
+                # repeat(self.beta),  # moved to demand_df addl_cost_params
+                repeat(self.memory),  # TODO: move memory to addl_cost_params
                 repeat(self.rho),
                 # repeat(self.tau),
-                repeat(self.top_k)   # TODO: move top_k to addl_params
+                repeat(self.top_k)   # TODO: move top_k to addl_cost_params
             ))
             for result in results:  # add to the all_choices dict
                 all_choices = {**all_choices, **result}
@@ -326,7 +326,7 @@ class AgentAccess:
         """Generates a set of agents based on population data.
         
         Parameters:
-            addl_params (dict): format of {"name": {"distribution": str, ...(distribution params)}}
+            addl_cost_params (dict): format of {"name": {"distribution": str, ...(distribution params)}}
         """
         agent_data = []
         self.demand_df = self.demand_df.drop_duplicates(subset=[self.demand_geoid])
@@ -339,7 +339,7 @@ class AgentAccess:
         # figure out the additional parameters
         # TODO: split this into a different function
         add_param_distributions = dict()
-        for param, distr in self.addl_params.items():
+        for param, distr in self.addl_cost_params.items():
             if distr["distribution"] == "constant":
                 add_param_distributions[param] = lambda : distr["value"]
             elif distr["distribution"] == "uniform":

@@ -1,8 +1,10 @@
 access
 contextily
 geopandas
-imageio
+imageio==2.27.0
 matplotlib
 numpy
 pandas
+scipy
+seaborn
 tqdm
