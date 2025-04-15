@@ -84,15 +84,17 @@ pop.head()
 
 # In[9]:
 
-
-pop["vehicle"] = pop["E_TOTPOP"] - pop["E_NOVEH"]
-
+pop["no_vehicle"] = (pop["E_TOTPOP"] * pop["EP_NOVEH"] / 100.0).astype(int)
+pop["vehicle"] = pop["E_TOTPOP"] - pop["no_vehicle"]
+pop.head()
 
 # In[10]:
 
 
-for x in pop["vehicle"]:
-    assert x >= 0
+for i, row in pop.iterrows():
+    assert row["vehicle"] >= 0
+    assert row["no_vehicle"] >= 0
+    assert row["vehicle"] + row["no_vehicle"] == row["E_TOTPOP"]
 
 
 # In[11]:
@@ -203,7 +205,7 @@ model = AgentAccess(
     paramDict["timeStep"],
     cost_function=paramDict["costFunc"],
 #     cost_prop=[0.7, 0.2, 0.1],
-#    cost_prop_fields=["vehicle", "E_NOVEH"],
+#    cost_prop_fields=["vehicle", "no_vehicle"],
     memory=0,
     pop_per_agent=paramDict["popPerAgent"],
     top_k=paramDict["myK"],
