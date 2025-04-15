@@ -37,7 +37,7 @@ def calculate_options(time_step, geoid, cost_df, cost_field, supply_df, memory, 
         time_step (int): the time step of the simulation
         geoid (str): the geoid for this location
         cost_df (pd.DataFrame): dataframe of the travel costs between locations
-        cost_field (str): the column in `cost_df` corresponding to the cost
+        cost_field (List of str): the column in `cost_df` corresponding to the cost (e.g., ["Car", "Walk"])
         supply_df (gpd.GeoDataFrame): GeoDataFrame of supply options
         memory (int): number of time steps to remember utilization
         rho (float): overall utilization rate
@@ -74,6 +74,8 @@ def calculate_options(time_step, geoid, cost_df, cost_field, supply_df, memory, 
 def calculate_costs(cost_function, utilization, time, agent_row, rho=None):
     """
     Calculates the costs for each choice
+
+    TODO: make cost_function the function and just call it
     """
     if cost_function == "gravity":
         # inverse of classic gravity
@@ -161,7 +163,7 @@ def determine_choices_unpacker(args):
 class AgentAccess:
     def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
                  cost_df, cost_origin, cost_dest, cost_field, time_steps, cost_function="raam",
-                 addl_cost_params=None, 
+                 addl_cost_params=None,
                  memory=0, pop_per_agent=1000, top_k=0, cost_prop=None, cost_prop_fields=None,
                  output_path=None, plot=True, processes=1, save_data=True):
         self.demand_df = demand_df
@@ -274,7 +276,7 @@ class AgentAccess:
         """
         locations = list(set(self.demand_df["GEOID"]))
         choice_col, cost_col = f"Choice {time_step}", f"Cost {time_step}"
-        self.demand_df[choice_col], self.demand_df[cost_col] = "", 0.0  # set as blank for now to create column
+        self.demand_df[choice_col], self.demand_df[cost_col] = "", 0.0  # set as blank to create column
         # add multiprocessing here
         # for geoid in tqdm(locations, desc="Agents choosing", position=0, total=len(locations)):
         all_choices = {}
@@ -324,7 +326,7 @@ class AgentAccess:
 
     def generate_agents_from_pop_data(self):
         """Generates a set of agents based on population data.
-        
+
         Parameters:
             addl_cost_params (dict): format of {"name": {"distribution": str, ...(distribution params)}}
         """
@@ -341,9 +343,9 @@ class AgentAccess:
         add_param_distributions = dict()
         for param, distr in self.addl_cost_params.items():
             if distr["distribution"] == "constant":
-                add_param_distributions[param] = lambda : distr["value"]
+                add_param_distributions[param] = lambda: distr["value"]
             elif distr["distribution"] == "uniform":
-                add_param_distributions[param] = lambda : np.random.uniform(distr["min"], distr["max"])
+                add_param_distributions[param] = lambda: np.random.uniform(distr["min"], distr["max"])
             else:
                 raise Exception(f"{distr['distribution']} is not a supported distribution. Supported: [constant, uniform]")
         agent_counter = 0
@@ -413,9 +415,10 @@ class AgentAccess:
         map_axes = [fig.add_subplot(gs[0:2, x]) for x in [0, 1]]
         columns = [f"Cost {time}", f"Time {time}"]
         titles = [f"Mean Cost at Time Step {time}", f"Mean Travel Time at Time Step {time}"]
+        legend_labels = ["Cost", "Travel Time"]
         geodataframes = [self.spatial_units_df, self.spatial_units_df]
-        for ax, col, data, title in zip(map_axes, columns, geodataframes, titles):
-            ax = data.plot(ax=ax, column=col, legend=True, legend_kwds={'pad': 0.02, 'shrink': .85})
+        for ax, col, data, title, llabel in zip(map_axes, columns, geodataframes, titles, legend_labels):
+            ax = data.plot(ax=ax, column=col, legend=True, legend_kwds={'label': llabel, 'pad': 0.02, 'shrink': .85})
             # cx.add_basemap(ax, crs=data.crs.to_string())
             ax.set_title(title)
             ax.axis('off')
@@ -428,6 +431,8 @@ class AgentAccess:
                 chart_axes[0].set_xlim(0, time)
         chart_axes[0].plot(range(time_steps), [np.mean(self.spatial_units_df[f"Cost {x}"]) for x in range(time_steps)], linestyle="--", color="r")
         chart_axes[0].set_title("Average Cost")
+        chart_axes[0].set_xlabel("Time Step")
+        chart_axes[0].set_ylabel("Costs")
         # plot the ratio over time
         for index, row in self.spatial_units_df.iterrows():
             chart_axes[1].plot(range(time_steps), list(row[[f"D/S Ratio {x}" for x in range(time_steps)]]), alpha=0.2)
@@ -435,6 +440,8 @@ class AgentAccess:
             if time > 0:
                 chart_axes[1].set_xlim(0, time)
         chart_axes[1].set_title("Average Utilization")
+        chart_axes[1].set_xlabel("Time Step")
+        chart_axes[1].set_ylabel("Demand/Supply Ratio")
         fig.subplots_adjust(hspace=0, wspace=0)
         plt.tight_layout()
         if save:
