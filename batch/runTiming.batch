@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH --job-name=time
+#SBATCH -n 12
+#SBATCH --mem=32G
+#SBATCH --time=48:00:00
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-type=END
+#SBATCH --mail-user=michels9@illinois.edu
+
+module purge
+cd ~/AgentAccess/notebooks
+source ~/.bashrc
+conda activate agentaccess
+python TimeModel.py
