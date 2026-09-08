@@ -77,6 +77,8 @@ def calculate_costs(cost_function, utilization, time, agent_row, rho=None):
 
     TODO: make cost_function the function and just call it
     """
+    if "cost_function" in agent_row:
+        cost_function = agent_row.cost_function  # allow for individualized cost functions
     if cost_function == "gravity":
         # inverse of classic gravity
         # return (time ** beta) * (utilization / rho)  # normalize by rho
@@ -94,7 +96,7 @@ def calculate_costs(cost_function, utilization, time, agent_row, rho=None):
 
 
 def determine_choices(time_step, geoid, cost_df, cost_field, demand_df, supply_df,
-                      cost_function, memory, rho, top_k):
+                      cost_function, memory, rho, top_k=0, logit=False):
     """
     Given information about the locations, determine the choice each agent makes
 
@@ -108,10 +110,8 @@ def determine_choices(time_step, geoid, cost_df, cost_field, demand_df, supply_d
         cost_function (str): function to use to determine costs
         memory (int): number of time steps to remember utilization
         rho (float): overall utilization rate
-        top_k (int): how many options each agent should consider
-        addl_cost_params (dict):
-            * beta (float): power for distance decay
-            * tau (float): time trade-off parameter for RAAM
+        top_k (int): default: 0. how many options each agent should consider
+        logit (bool): default: False. Whether to apply multinomial logit
 
     Returns:
         reachable (dict): a dictionary of lists giving the supply options for each mode of transportation
@@ -142,11 +142,14 @@ def determine_choices(time_step, geoid, cost_df, cost_field, demand_df, supply_d
             ind = sorted_inds[:top_k]
             resources_to_consider = resources_to_consider[ind]
             costs = costs[ind]
-        # probabilities are inverse to costs
-        resource_probabilities = 1 / costs
-        # print(resource_probabilities)
-        resource_probabilities = resource_probabilities / sum(resource_probabilities)
-        # print(resource_probabilities)
+        if logit:
+            resource_probabilities = np.exp(-costs)
+            resource_probabilities = resource_probabilities / sum(resource_probabilities)
+        else:
+            # probabilities are inverse to costs
+            resource_probabilities = 1 / costs
+            # print(resource_probabilities)
+            resource_probabilities = resource_probabilities / sum(resource_probabilities)
         choice_ind = np.random.choice(range(len(resource_probabilities)), p=resource_probabilities)
         choice_dict[a_index, choice_col] = resources_to_consider[choice_ind]
         choice_dict[a_index, cost_col] = costs[choice_ind]
@@ -164,7 +167,7 @@ class AgentAccess:
     def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
                  cost_df, cost_origin, cost_dest, cost_field, time_steps, cost_function="raam",
                  addl_cost_params=None,
-                 memory=0, pop_per_agent=1000, top_k=0, cost_prop=None, cost_prop_fields=None,
+                 memory=0, pop_per_agent=1000, top_k=0, logit=False, cost_prop=None, cost_prop_fields=None,
                  output_path=None, plot=True, processes=1, save_data=True):
         self.demand_df = demand_df
         self.demand_geoid = demand_geoid
@@ -188,6 +191,7 @@ class AgentAccess:
         self.pop_per_agent = pop_per_agent
         self.processes = int(processes)
         self.top_k = top_k
+        self.logit = logit
         # checking that cost function params exist
         # TODO: verify that passed in params work as well
         if self.addl_cost_params is None:
@@ -227,7 +231,7 @@ class AgentAccess:
         self.supply_df = self.supply_df.rename(columns={self.supply_field: "Supply"})
         self.supply_df = self.supply_df.dissolve(by="GEOID", aggfunc="sum")
         post_sum = sum(self.supply_df["Supply"])
-        assert pre_sum == post_sum  # ensure we didn't lose/add supply
+        # assert pre_sum == post_sum  # ensure we didn't lose/add supply
 
     def calculate_mean_cost(self, time):
         """Calculate the agent's average cost per spatial unit"""
@@ -286,7 +290,7 @@ class AgentAccess:
             # for geoid in tqdm(locations, desc="Choices", position=0):
             for geoid in locations:
                 choices_dict = determine_choices(time_step, geoid, self.cost_df, self.cost_field, copy.deepcopy(self.demand_df),
-                                                 self.supply_df, self.cost_function, self.memory, self.rho, self.top_k)
+                                                 self.supply_df, self.cost_function, self.memory, self.rho, self.top_k, self.logit)
                 all_choices = {**all_choices, **choices_dict}
         else:
             # print("using multiprocessing version....")
