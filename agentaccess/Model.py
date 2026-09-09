@@ -13,6 +13,7 @@ import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
+import sys
 import time as pytime  # noqa
 from tqdm import tqdm
 
@@ -150,6 +151,7 @@ def determine_choices(time_step, geoid, cost_df, cost_field, demand_df, supply_d
             resource_probabilities = 1 / costs
             # print(resource_probabilities)
             resource_probabilities = resource_probabilities / sum(resource_probabilities)
+        # TODO check for impossible probabilities/infs
         choice_ind = np.random.choice(range(len(resource_probabilities)), p=resource_probabilities)
         choice_dict[a_index, choice_col] = resources_to_consider[choice_ind]
         choice_dict[a_index, cost_col] = costs[choice_ind]
@@ -225,7 +227,7 @@ class AgentAccess:
         if self.spatial_units_df is None:
             self.get_spatial_units()
         pre_sum = sum(self.supply_df[self.supply_field])
-        self.supply_df = self.supply_df[self.supply_df[self.supply_field] >= 0]
+        self.supply_df = self.supply_df[self.supply_df[self.supply_field] > 0]  # has to be greater than zero to avoid division by zero
         self.supply_df = gpd.sjoin(self.spatial_units_df, self.supply_df, how="inner", predicate="contains")
         self.supply_df = self.supply_df[[self.supply_field, "geometry"]]
         self.supply_df = self.supply_df.rename(columns={self.supply_field: "Supply"})
