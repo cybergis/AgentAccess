@@ -189,43 +189,44 @@ def average_columns(df, new_column, columns_to_average):
 # def __init__(self, demand_df, demand_geoid, demand_field, supply_df, supply_geoid, supply_field,
 #              cost_df, cost_origin, cost_dest, cost_field, time_steps, memory=0, pop_per_agent=1000, top_k=0):
 
-random.seed(paramDict["seedval"])
-model = AgentAccess(
-    pop,
-    "FIPS",
-    "E_TOTPOP",
-    hos,
-    "who cares",
-    "BEDS",
-    travel_times,
-    "origin",
-    "destination",
-    ["car"],
-#    ["car", "transit"],
-    paramDict["timeStep"],
-    cost_function=paramDict["costFunc"],
-#     cost_prop=[0.7, 0.2, 0.1],
-#    cost_prop_fields=["vehicle", "no_vehicle"],
-    memory=0,
-    pop_per_agent=paramDict["popPerAgent"],
-    top_k=paramDict["myK"],
-    logit=True,
-    output_path="/home/dal384425/work/AgentAccess/Logit/",
-    plot=False,
-    save_data=False
-)
-model.run_model()
-ts = paramDict["timeStep"]
-portions = [2, 3, 4]
-cols_to_average = ["Cost", "Time", "D/S Ratio"]
-cols_to_save = []
-df = model.spatial_units_df
-for port in portions:
-    for col in cols_to_average:
-        cols_to_save.append(f"{col}_{port}")
-        # average the last 1/port time steps
-        df = average_columns(df, f"{col}_{port}", [f"{col} {x}" for x  in range(ts-(ts//port), ts)])
-df = df[cols_to_save]
-df.head()
-df.to_csv(os.path.join(model.output_dir, "spatial_units.csv"))
+for seed in range(5):
+    random.seed(seed)
+    model = AgentAccess(
+        pop,
+        "FIPS",
+        "E_TOTPOP",
+        hos,
+        "who cares",
+        "BEDS",
+        travel_times,
+        "origin",
+        "destination",
+        ["car"],
+    #    ["car", "transit"],
+        paramDict["timeStep"],
+        cost_function=paramDict["costFunc"],
+    #     cost_prop=[0.7, 0.2, 0.1],
+    #    cost_prop_fields=["vehicle", "no_vehicle"],
+        memory=0,
+        pop_per_agent=paramDict["popPerAgent"],
+        top_k=paramDict["myK"],
+        logit=True,
+        output_path="/home/dal384425/work/AgentAccess/Logit/",
+        plot=False,
+        save_data=False
+    )
+    model.run_model()
+    ts = paramDict["timeStep"]
+    portions = [2, 3, 4]
+    cols_to_average = ["Cost", "Time", "D/S Ratio"]
+    cols_to_save = []
+    df = model.spatial_units_df
+    for port in portions:
+        for col in cols_to_average:
+            cols_to_save.append(f"{col}_{port}")
+            # average the last 1/port time steps
+            df = average_columns(df, f"{col}_{port}", [f"{col} {x}" for x  in range(ts-(ts//port), ts)])
+    df = df[cols_to_save]
+    df.head()
+    df.to_csv(os.path.join(model.output_dir, "spatial_units.csv"))
 
