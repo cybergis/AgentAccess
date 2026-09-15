@@ -48,6 +48,7 @@ def calculate_options(time_step, geoid, cost_df, cost_field, supply_df, memory, 
         utilization_dict (dict): a map giving the utilization of each reachable supply for each travel mode
     """
     # calculate what is reachable from this location
+    # TODO: add a way to limit total travel time
     reachable = dict()
     for travel_method in cost_field:
         travel_from_here = cost_df.loc[geoid]
@@ -226,12 +227,14 @@ class AgentAccess:
             self.get_spatial_units()
         pre_sum = sum(self.supply_df[self.supply_field])
         self.supply_df = self.supply_df[self.supply_df[self.supply_field] >= 0]
+        # TODO: ASSUMES GEODATAFRAMe
         self.supply_df = gpd.sjoin(self.spatial_units_df, self.supply_df, how="inner", predicate="contains")
         self.supply_df = self.supply_df[[self.supply_field, "geometry"]]
         self.supply_df = self.supply_df.rename(columns={self.supply_field: "Supply"})
         self.supply_df = self.supply_df.dissolve(by="GEOID", aggfunc="sum")
         post_sum = sum(self.supply_df["Supply"])
-        # assert pre_sum == post_sum  # ensure we didn't lose/add supply
+        # print(pre_sum, post_sum)
+        # assert pre_sum == post_sum  # TODO: convert this to a warning
 
     def calculate_mean_cost(self, time):
         """Calculate the agent's average cost per spatial unit"""
@@ -423,7 +426,7 @@ class AgentAccess:
         geodataframes = [self.spatial_units_df, self.spatial_units_df]
         for ax, col, data, title, llabel in zip(map_axes, columns, geodataframes, titles, legend_labels):
             ax = data.plot(ax=ax, column=col, legend=True, legend_kwds={'label': llabel, 'pad': 0.02, 'shrink': .85})
-            # cx.add_basemap(ax, crs=data.crs.to_string())
+            cx.add_basemap(ax, crs=data.crs.to_string())
             ax.set_title(title)
             ax.axis('off')
         chart_axes = [fig.add_subplot(gs[2, x]) for x in [0, 1]]
