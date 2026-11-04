@@ -1,5 +1,7 @@
 # AgentAccess
 
+**Paper out now in CEUS: [https://doi.org/10.1016/j.compenvurbsys.2026.102543](https://doi.org/10.1016/j.compenvurbsys.2026.102543)
+
 **Authors:** [Alexander Michels](https://github.com/alexandermichels)
 
 This project is working towards understanding accessibility through Agent-Based Modeling (ABM).
